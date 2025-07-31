@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Signal Analyzer - QUANTUM v10</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-space: #020617;
+            --glass-bg: rgba(15, 23, 42, 0.65);
+            --border-color: rgba(56, 189, 248, 0.2);
+            --glow-primary: #38bdf8;
+            --text-primary: #e0f2fe;
+            --text-secondary: #a3b8d0;
+        }
+        body {
+            font-family: 'Sarabun', sans-serif;
+            background-color: var(--bg-space);
+            color: var(--text-primary);
+        }
+        #star-bg { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; }
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--border-color);
+            border-radius: 1rem;
+            padding: 1.5rem;
+        }
+        .action-btn {
+            background: var(--glow-primary);
+            color: var(--bg-space);
+            transition: all 0.3s ease;
+        }
+        .action-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(56, 189, 248, 0.3);
+        }
+        .action-btn:disabled { filter: grayscale(80%); cursor: not-allowed; }
+        
+        .option-btn {
+            border: 1px solid var(--border-color);
+            transition: all 0.2s ease;
+        }
+        .option-btn.selected {
+            background-color: var(--glow-primary);
+            border-color: var(--glow-primary);
+            color: var(--bg-space);
+            font-weight: 700;
+        }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background-color: var(--glow-primary); border-radius: 3px; }
+    </style>
+</head>
+<body class="p-2 sm:p-4">
+    <canvas id="star-bg"></canvas>
+
+    <div class="w-full max-w-[1600px] mx-auto">
+        <header class="text-center mb-4">
+            <h1 class="text-2xl sm:text-3xl md:text-4xl font-bold">AI Signal Analyzer</h1>
+            <p class="text-sm text-text-secondary">QUANTUM v10</p>
+        </header>
+
+        <main class="grid grid-cols-1 md:grid-cols-6 lg:grid-cols-8 gap-4">
+            
+            <section class="md:col-span-2 lg:col-span-2 glass-panel space-y-4 h-fit">
+                <h2 class="text-xl font-bold">ส่วนควบคุม</h2>
+                <div>
+                    <label class="font-semibold">สินทรัพย์ (Asset)</label>
+                    <div id="asset-options" class="grid grid-cols-2 gap-2 mt-2">
+                        <button class="option-btn p-2 rounded-lg text-sm" data-value="BTC/USD">BTC/USD</button>
+                        <button class="option-btn p-2 rounded-lg text-sm" data-value="XAU/USD">XAU/USD</button>
+                        <button class="option-btn p-2 rounded-lg text-sm" data-value="ETH/USD">ETH/USD</button>
+                        <button class="option-btn p-2 rounded-lg text-sm selected" data-value="ไม่ระบุ">อื่นๆ</button>
+                    </div>
+                </div>
+                <div>
+                    <label class="font-semibold">ไทม์เฟรม (Timeframe)</label>
+                    <div id="timeframe-options" class="grid grid-cols-2 gap-2 mt-2">
+                        <button class="option-btn p-2 rounded-lg text-sm" data-value="15M">15M</button>
+                        <button class="option-btn p-2 rounded-lg text-sm" data-value="1H">1H</button>
+                        <button class="option-btn p-2 rounded-lg text-sm selected" data-value="4H">4H</button>
+                        <button class="option-btn p-2 rounded-lg text-sm" data-value="Daily">Daily</button>
+                    </div>
+                </div>
+                <div>
+                    <label for="chart-upload" class="font-semibold">อัปโหลดกราฟ</label>
+                    <label for="chart-upload" class="mt-2 flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-600 rounded-lg cursor-pointer hover:border-glow-primary">
+                        <div id="upload-prompt" class="text-center">
+                            <p class="text-sm">Click to Upload</p>
+                        </div>
+                        <img id="image-preview" class="hidden h-full w-full object-contain p-1"/>
+                        <input id="chart-upload" type="file" class="hidden" accept="image/png, image/jpeg" />
+                    </label>
+                </div>
+                <button id="analyze-btn" disabled class="action-btn w-full text-lg font-bold py-3 rounded-lg flex items-center justify-center">
+                    <span>วิเคราะห์</span>
+                    <div id="loader" class="hidden ml-3 w-5 h-5 border-2 rounded-full border-t-transparent animate-spin"></div>
+                </button>
+            </section>
+
+            <section class="md:col-span-4 lg:col-span-4 glass-panel space-y-4">
+                 <h2 class="text-xl font-bold text-center">ผลการวิเคราะห์</h2>
+                 <div id="results-container" class="hidden space-y-4">
+                    <div id="signal-header" class="text-center p-3 rounded-lg border-2"><p class="text-2xl font-bold" id="signal-direction"></p></div>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-center">
+                        <div class="bg-black/30 p-3 rounded-lg"><p class="text-sm text-blue-300">ราคาเข้า (Entry)</p><p id="entry-price" class="text-xl font-bold">-</p></div>
+                        <div class="bg-black/30 p-3 rounded-lg"><p class="text-sm text-green-300">ทำกำไร (TP)</p><p id="take-profit" class="text-xl font-bold">-</p></div>
+                        <div class="bg-black/30 p-3 rounded-lg"><p class="text-sm text-red-400">ตัดขาดทุน (SL)</p><p id="stop-loss" class="text-xl font-bold">-</p></div>
+                    </div>
+                    
+                    <div id="entry-rationale-card" class="bg-gradient-to-br from-blue-900/50 to-purple-900/50 p-4 rounded-lg border border-blue-400/50">
+                        <h3 class="font-semibold mb-2 text-glow-primary flex items-center">
+                            <svg class="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                            หลักการและเหตุผลในการเข้าเทรด
+                        </h3>
+                        <p id="entry-rationale" class="text-sm text-text-primary leading-relaxed"></p>
+                    </div>
+
+                    <div class="bg-black/30 p-4 rounded-lg">
+                        <h3 class="font-semibold mb-1 text-text-secondary">ภาพรวมการวิเคราะห์ (Full Analysis)</h3>
+                        <p id="analysis-reasoning" class="text-sm text-text-secondary leading-relaxed max-h-40 overflow-y-auto pr-2"></p>
+                    </div>
+                    <div class="text-center">
+                        <button id="save-signal-btn" class="border border-glow-primary text-glow-primary px-4 py-1 rounded-full text-xs hover:bg-glow-primary hover:text-bg-space">💾 บันทึกลง Journal</button>
+                    </div>
+                </div>
+                <div id="init-prompt" class="flex items-center justify-center h-full text-text-secondary text-center min-h-[400px]">
+                    <p>กรุณาใส่ข้อมูลเพื่อเริ่มการวิเคราะห์...</p>
+                </div>
+            </section>
+            
+            <section class="md:col-span-6 lg:col-span-2 glass-panel space-y-4 h-fit">
+                <h2 class="text-xl font-bold">ข้อมูลและสถิติ</h2>
+                <div class="text-center bg-black/30 p-3 rounded-lg">
+                    <p id="realtime-time" class="text-2xl font-bold"></p>
+                    <p id="realtime-date" class="text-sm text-text-secondary"></p>
+                </div>
+                <div>
+                    <h3 class="font-semibold text-lg mb-2">รายงานผล (Trading Journal)</h3>
+                    <div class="max-h-96 overflow-y-auto">
+                        <table class="w-full text-left text-sm">
+                            <thead><tr class="border-b-2 border-b-glow-primary">
+                                <th class="p-2">วัน-เวลา</th><th class="p-2">Asset</th><th class="p-2 text-right">ผล</th>
+                            </tr></thead>
+                            <tbody id="journal-history"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+    
+    <script>
+        // --- Starfield Background Script ---
+        const canvas = document.getElementById('star-bg');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        let stars = Array.from({ length: 300 }, () => ({
+            x: Math.random() * canvas.width, y: Math.random() * canvas.height,
+            radius: Math.random() * 1.2, alpha: Math.random() * 0.5 + 0.5,
+            vx: Math.random() * 0.1 - 0.05
+        }));
+        function drawStars() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
+            stars.forEach(star => {
+                ctx.beginPath();
+                ctx.arc(star.x, star.y, star.radius, 0, Math.PI * 2);
+                ctx.globalAlpha = star.alpha;
+                ctx.fill();
+                star.x += star.vx;
+                if (star.x < 0) star.x = canvas.width;
+                if (star.x > canvas.width) star.x = 0;
+            });
+            requestAnimationFrame(drawStars);
+        }
+        drawStars();
+        window.addEventListener('resize', () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; });
+
+        // --- Real-time Clock ---
+        const timeEl = document.getElementById('realtime-time');
+        const dateEl = document.getElementById('realtime-date');
+        function updateClock() {
+            const now = new Date();
+            timeEl.textContent = now.toLocaleTimeString('th-TH');
+            dateEl.textContent = now.toLocaleDateString('th-TH', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'});
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+        
+        // --- CORE APPLICATION LOGIC (REBUILT & STABLE) ---
+        const dom = {
+            uploadInput: document.getElementById('chart-upload'),
+            imagePreview: document.getElementById('image-preview'),
+            uploadPrompt: document.getElementById('upload-prompt'),
+            analyzeBtn: document.getElementById('analyze-btn'),
+            loader: document.getElementById('loader'),
+            assetOptions: document.getElementById('asset-options'),
+            timeframeOptions: document.getElementById('timeframe-options'),
+            resultsContainer: document.getElementById('results-container'),
+            initPrompt: document.getElementById('init-prompt'),
+            signalDirection: document.getElementById('signal-direction'),
+            signalHeader: document.getElementById('signal-header'),
+            entryPrice: document.getElementById('entry-price'),
+            takeProfit: document.getElementById('take-profit'),
+            stopLoss: document.getElementById('stop-loss'),
+            analysisReasoning: document.getElementById('analysis-reasoning'),
+            entryRationale: document.getElementById('entry-rationale'), // NEW
+            saveSignalBtn: document.getElementById('save-signal-btn'),
+            journalHistory: document.getElementById('journal-history')
+        };
+        
+        const state = {
+            imageBase64Data: null,
+            selectedAsset: 'ไม่ระบุ',
+            selectedTimeframe: '4H',
+            currentTradeSignal: null
+        };
+        
+        function setupOptionButtons(container, stateKey) {
+            container.addEventListener('click', (e) => {
+                const button = e.target.closest('button');
+                if (button) {
+                    container.querySelectorAll('button').forEach(btn => btn.classList.remove('selected'));
+                    button.classList.add('selected');
+                    state[stateKey] = button.dataset.value;
+                }
+            });
+        }
+        
+        dom.uploadInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    dom.imagePreview.src = e.target.result;
+                    state.imageBase64Data = e.target.result.split(',')[1];
+                    dom.imagePreview.classList.remove('hidden');
+                    dom.uploadPrompt.classList.add('hidden');
+                    dom.analyzeBtn.disabled = false;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        dom.analyzeBtn.addEventListener('click', async () => {
+            if (!state.imageBase64Data) return;
+            setLoadingState(true);
+            try {
+                // UPGRADED PROMPT
+                const prompt = `
+                คุณคือสุดยอด AI Analyst จากสถาบันการเงินระดับโลก (Institutional-Grade Super-Analyst) คุณต้องวิเคราะห์กราฟที่ได้รับมาอย่างละเอียดและลึกซึ้งที่สุดตามกระบวนการ 5 ขั้นตอนนี้เท่านั้น:
+                1.  **Macro & Inter-market Context:** วิเคราะห์ภาพใหญ่จาก Timeframe ที่สูงกว่า (Weekly, Daily) เพื่อหา 'Major Bias' และพิจารณาความสัมพันธ์กับสินทรัพย์อื่นที่เกี่ยวข้อง (เช่น DXY, US10Y).
+                2.  **Market Structure & Wyckoff:** ระบุว่าตลาดอยู่ในช่วงใดของวัฏจักร Wyckoff (Accumulation, Distribution) และระบุโครงสร้างตลาด (BOS, CHoCH).
+                3.  **Smart Money Concepts (SMC):** ค้นหาร่องรอยของรายใหญ่ ระบุโซน 'Order Blocks', 'Fair Value Gaps (FVG)', และ 'Liquidity Pools' ที่ราคาอาจจะพุ่งไปหา.
+                4.  **Signal Formulation:** สังเคราะห์ข้อมูลทั้งหมดเพื่อสร้างสัญญาณเทรด (Trade Setup) ที่มีความน่าจะเป็นสูงสุด ระบุ Entry, TP, SL ที่แม่นยำ.
+                5.  **Entry Rationale & Reasoning:**
+                    * **entryRationale:** สร้างข้อความสรุปที่ 'ชัดเจนและกระชับ' เพื่อเป็นเหตุผลหลักในการเข้าเทรด ณ จุดนี้โดยเฉพาะ โดยอ้างอิงถึง 'สัญญาณยืนยัน' (Confirmation Signal) ที่สำคัญที่สุด เช่น 'เกิดแท่งเทียน Bullish Engulfing ที่โซน FVG ของ Timeframe 4H'.
+                    * **reasoning:** เขียนบทวิเคราะห์ภาพรวมทั้งหมดตามกระบวนการ 1-4 อย่างละเอียด.
+                
+                ส่งผลลัพธ์เป็น JSON object ที่สมบูรณ์แบบและถูกต้องเท่านั้น โดยมี key: entryPrice, takeProfit, stopLoss, tradeDirection, reasoning, และ entryRationale. ทุกข้อความเป็นภาษาไทยแต่คงคำศัพท์เทคนิคภาษาอังกฤษไว้.
+                `;
+                const payload = {
+                    contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: "image/jpeg", data: state.imageBase64Data } }] }],
+                    generationConfig: { responseMimeType: "application/json" }
+                };
+                const tradeSignal = await callGeminiAPI(payload);
+                state.currentTradeSignal = tradeSignal;
+                displayResults(tradeSignal);
+            } catch (error) {
+                displayError(error.message);
+            } finally {
+                setLoadingState(false);
+            }
+        });
+
+        async function callGeminiAPI(payload) {
+            const apiKey = ""; // <--- ใส่ GEMINI API KEY ของคุณที่นี่
+
+            if (!apiKey) throw new Error("ไม่พบ API Key! กรุณาใส่ Gemini API Key ของคุณในโค้ด");
+            
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`;
+            const response = await fetch(apiUrl, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+            });
+             if (!response.ok) {
+                const errorBody = await response.json();
+                throw new Error(errorBody?.error?.message ?? 'Unknown API error');
+            }
+            const result = await response.json();
+            const part = result.candidates?.[0]?.content?.parts?.[0];
+            if (part?.text) {
+                const cleanedText = part.text.replace(/```json/g, '').replace(/```/g, '').trim();
+                return JSON.parse(cleanedText);
+            }
+            throw new Error("โครงสร้างข้อมูลจาก AI ไม่ถูกต้อง");
+        }
+        
+        function setLoadingState(isLoading) {
+            dom.analyzeBtn.disabled = isLoading;
+            dom.loader.classList.toggle('hidden', !isLoading);
+        }
+
+        function displayResults(data) {
+            dom.initPrompt.classList.add('hidden');
+            dom.entryPrice.textContent = data.entryPrice || '-';
+            dom.takeProfit.textContent = data.takeProfit || '-';
+            dom.stopLoss.textContent = data.stopLoss || '-';
+            dom.analysisReasoning.textContent = data.reasoning || '-';
+            dom.entryRationale.textContent = data.entryRationale || 'ไม่มีเหตุผลเฉพาะเจาะจง'; // NEW
+            dom.signalHeader.className = 'text-center p-3 rounded-lg border-2';
+            if (data.tradeDirection?.toLowerCase() === 'long') {
+                dom.signalDirection.textContent = '📈 สัญญาณซื้อ (LONG)';
+                dom.signalHeader.classList.add('border-green-400', 'text-green-300');
+            } else {
+                dom.signalDirection.textContent = '📉 สัญญาณขาย (SHORT)';
+                dom.signalHeader.classList.add('border-red-400', 'text-red-300');
+            }
+            dom.resultsContainer.classList.remove('hidden');
+        }
+
+        function displayError(message) {
+            dom.initPrompt.classList.add('hidden');
+            dom.signalHeader.className = 'text-center p-3 rounded-lg border-2 border-yellow-400 text-yellow-300';
+            dom.signalDirection.textContent = 'เกิดข้อผิดพลาด';
+            dom.analysisReasoning.textContent = message;
+            dom.entryRationale.textContent = 'การวิเคราะห์ล้มเหลว'; // NEW
+            dom.resultsContainer.classList.remove('hidden');
+        }
+
+        dom.saveSignalBtn.addEventListener('click', () => {
+            if (!state.currentTradeSignal) return;
+            const trades = JSON.parse(localStorage.getItem('tradingJournalV10')) || [];
+            trades.push({
+                id: Date.now(), asset: state.selectedAsset, signal: state.currentTradeSignal, status: 'pending', date: new Date().toISOString()
+            });
+            localStorage.setItem('tradingJournalV10', JSON.stringify(trades));
+            renderJournal();
+        });
+
+        function renderJournal() {
+            const trades = JSON.parse(localStorage.getItem('tradingJournalV10')) || [];
+            dom.journalHistory.innerHTML = '';
+            if (trades.length === 0) {
+                dom.journalHistory.innerHTML = `<tr><td colspan="3" class="p-4 text-center text-sm text-text-secondary">ยังไม่มีข้อมูล</td></tr>`;
+                return;
+            }
+            trades.slice().reverse().forEach(trade => {
+                const tr = document.createElement('tr');
+                tr.className = 'border-b border-b-border-color';
+                const formattedDate = new Date(trade.date).toLocaleString('th-TH', { year: '2-digit', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'});
+                let statusHtml;
+                if (trade.status === 'pending') {
+                    statusHtml = `<button class="win-btn bg-green-500/50 hover:bg-green-500 text-xs px-2 py-1 rounded" data-id="${trade.id}">Win</button> <button class="lose-btn bg-red-500/50 hover:bg-red-500 text-xs px-2 py-1 rounded" data-id="${trade.id}">Lose</button>`;
+                } else {
+                    statusHtml = `<span class="font-bold ${trade.status === 'win' ? 'text-green-400' : 'text-red-400'}">${trade.status.toUpperCase()}</span>`;
+                }
+                tr.innerHTML = `<td class="p-2">${formattedDate}</td><td class="p-2">${trade.asset}</td><td class="p-2 text-right">${statusHtml}</td>`;
+                dom.journalHistory.appendChild(tr);
+            });
+        }
+        
+        dom.journalHistory.addEventListener('click', (e) => {
+            const button = e.target.closest('button[data-id]');
+            if (button) {
+                const trades = JSON.parse(localStorage.getItem('tradingJournalV10')) || [];
+                const id = parseInt(button.dataset.id);
+                const tradeIndex = trades.findIndex(t => t.id === id);
+                if (tradeIndex > -1) {
+                    trades[tradeIndex].status = button.classList.contains('win-btn') ? 'win' : 'lose';
+                    localStorage.setItem('tradingJournalV10', JSON.stringify(trades));
+                    renderJournal();
+                }
+            }
+        });
+
+        document.addEventListener('DOMContentLoaded', () => {
+             setupOptionButtons(dom.assetOptions, 'selectedAsset');
+             setupOptionButtons(dom.timeframeOptions, 'selectedTimeframe');
+             renderJournal();
+        });
+
+    </script>
+</body>
+</html>
